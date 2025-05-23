@@ -26,6 +26,7 @@ const ICON_PROPS: LucideProps = {
   size: 21,
   strokeWidth: 1.8,
 };
+const BTN_HEIGHT = 38;
 
 export default function Board() {
   const text = useThemeColor({}, "text");
@@ -140,23 +141,39 @@ const ActionBar = ({
     }
   );
 
-  const progress = useDerivedValue(() => {
-    return pressing.value && pathLength.value > 0
-      ? withTiming(
-          1,
-          {
-            duration: pathLength.value * 2,
-          },
-          () => {
-            signed.value = true;
-          }
-        )
-      : 0;
-  });
+  const progress = useDerivedValue(() =>
+    withTiming(
+      (signed.value || pressing.value) && pathLength.value > 0 ? 1 : 0,
+      {
+        duration: pressing.value ? pathLength.value * 2 : 0,
+      }
+    )
+  );
+
+  useAnimatedReaction(
+    () => progress.value,
+    (currentProgress) => {
+      if (currentProgress === 1) {
+        signed.value = pathLength.value > 0 && pressing.value;
+      } else {
+        signed.value = false;
+      }
+    }
+  );
 
   const slideAnimatedStyle = useAnimatedStyle(() => {
     return {
-      width: buttonWidth * progress.value,
+      width: signed.value ? buttonWidth : buttonWidth * progress.value,
+    };
+  });
+
+  const signedAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateY: withTiming(signed.value ? BTN_HEIGHT : 0),
+        },
+      ],
     };
   });
 
@@ -169,12 +186,15 @@ const ActionBar = ({
         alignItems: "center",
       }}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          gap: 12,
-          opacity: 0.6,
-        }}
+      <Animated.View
+        style={[
+          {
+            flexDirection: "row",
+            gap: 12,
+            opacity: 0.6,
+          },
+          signedAnimatedStyle,
+        ]}
       >
         <Pressable onPress={onUndo} style={styles.button}>
           <Undo {...iconProps} />
@@ -182,14 +202,15 @@ const ActionBar = ({
         <Pressable onPress={onErase} style={styles.button}>
           <Eraser {...iconProps} />
         </Pressable>
-      </View>
+      </Animated.View>
       <Pressable
         style={[
+          styles.confirmBtnBlock,
           styles.confirmBtn,
           { backgroundColor: text + "20", width: buttonWidth },
         ]}
         onPressIn={() => {
-          pressing.value = true;
+          pressing.value = !signed.value;
         }}
         onPressOut={() => {
           pressing.value = false;
@@ -204,16 +225,25 @@ const ActionBar = ({
           }
           animatedStyle={slideAnimatedStyle}
         />
-        <ThemedText style={{ fontSize: 15 }}>Hold to confirm</ThemedText>
-        <OverlayMask
-          color="#1B7F3E"
-          element={
-            <ThemedText style={{ fontSize: 15, color: "#000" }}>
-              Hold to confirm
+        <Animated.View style={[signedAnimatedStyle]}>
+          <View style={[styles.confirmBtnBlock, {}]}>
+            <ThemedText style={{ fontSize: 15, color: "#1B7F3E" }}>
+              Signed
             </ThemedText>
-          }
-          animatedStyle={slideAnimatedStyle}
-        />
+          </View>
+          <View style={styles.confirmBtnBlock}>
+            <ThemedText style={{ fontSize: 15 }}>Hold to confirm</ThemedText>
+            <OverlayMask
+              color="#1B7F3E"
+              element={
+                <ThemedText style={{ fontSize: 15, color: "#000" }}>
+                  Hold to confirm
+                </ThemedText>
+              }
+              animatedStyle={slideAnimatedStyle}
+            />
+          </View>
+        </Animated.View>
       </Pressable>
     </View>
   );
@@ -327,9 +357,14 @@ const styles = StyleSheet.create({
     paddingRight: 6,
   },
   confirmBtn: {
-    padding: 8,
-    alignItems: "center",
     borderRadius: 6,
     overflow: "hidden",
+    justifyContent: "flex-end",
+    alignItems: "stretch",
+  },
+  confirmBtnBlock: {
+    height: BTN_HEIGHT,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
