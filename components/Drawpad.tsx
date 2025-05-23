@@ -204,7 +204,19 @@ const DrawPath = ({
           })
         );
       } else {
-        progress.value = 1;
+        progress.value =
+          progress.value < 1
+            ? withTiming(
+                0,
+                {
+                  duration: progress.value > 0 ? length * 2 : 0,
+                  easing: Easing.bezier(0.4, 0, 0.5, 1),
+                },
+                () => {
+                  progress.value = 1;
+                }
+              )
+            : 1;
       }
     }
   );
