@@ -1,7 +1,14 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import React, { useRef } from "react";
 import DrawPad from "./Drawpad";
-import { Eraser, LucideProps, PenLine, Type, Undo } from "lucide-react-native";
+import {
+  Eraser,
+  Eye,
+  LucideProps,
+  PenLine,
+  RotateCcw,
+  Undo,
+} from "lucide-react-native";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { ThemedText } from "./ThemedText";
 
@@ -21,6 +28,16 @@ export default function Board() {
   };
   const handleUndo = () => {
     if (padRef.current) {
+      padRef.current.undo();
+    }
+  };
+  const handleReset = () => {
+    if (padRef.current) {
+      padRef.current.erase();
+    }
+  };
+  const handlePreview = () => {
+    if (padRef.current) {
       padRef.current.play();
     }
   };
@@ -35,7 +52,7 @@ export default function Board() {
         borderColor: text + "25",
       }}
     >
-      <HeaderBar />
+      <HeaderBar onReset={handleReset} onPreview={handlePreview} />
       <DrawPad height={180} width={330} ref={padRef} />
       <ActionBar onErase={handleErase} onUndo={handleUndo} />
     </View>
@@ -75,7 +92,13 @@ const ActionBar = ({
   );
 };
 
-const HeaderBar = () => {
+const HeaderBar = ({
+  onReset,
+  onPreview,
+}: {
+  onPreview?: () => void;
+  onReset?: () => void;
+}) => {
   const text = useThemeColor({}, "text");
 
   const iconProps: LucideProps = {
@@ -97,13 +120,24 @@ const HeaderBar = () => {
       <Pressable>
         <PenLine {...iconProps} />
       </Pressable>
-      <ThemedText style={{ lineHeight: 48 }}>Draw signature</ThemedText>
+      <ThemedText style={{ lineHeight: 48, flex: 1 }}>
+        Draw signature
+      </ThemedText>
+      <Pressable onPress={onPreview} style={styles.headerBtn}>
+        <Eye {...iconProps} size={22} />
+      </Pressable>
+      <Pressable onPress={onReset} style={styles.headerBtn}>
+        <RotateCcw {...iconProps} size={20} />
+      </Pressable>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   button: {
-    paddingHorizontal: 8,
+    paddingLeft: 6,
+  },
+  headerBtn: {
+    paddingRight: 6,
   },
 });

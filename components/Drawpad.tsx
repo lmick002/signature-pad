@@ -17,6 +17,7 @@ import Animated, {
   withTiming,
   SharedValue,
   useAnimatedReaction,
+  Easing,
 } from "react-native-reanimated";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { svgPathProperties } from "svg-path-properties";
@@ -84,7 +85,6 @@ const DrawPad = forwardRef(
 
     const panGesture = Gesture.Pan()
       .minDistance(0)
-      .maxPointers(1)
       .onStart((e) => {
         currentPath.value = `M ${e.x} ${e.y}`;
       })
@@ -152,10 +152,14 @@ const DrawPath = ({
       if (isPlaying) {
         progress.value = 0;
         progress.value = withDelay(
-          prevLength * 2,
-          withTiming(1, { duration: length * 2 }, () => {
-            playing.value = false;
-          })
+          prevLength * 2 + 1,
+          withTiming(
+            1,
+            { duration: length * 2, easing: Easing.bezier(0.4, 0, 0.5, 1) },
+            () => {
+              playing.value = false;
+            }
+          )
         );
       }
     }
