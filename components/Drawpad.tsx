@@ -1,6 +1,7 @@
 import React, {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -18,6 +19,7 @@ import Animated, {
   SharedValue,
   useAnimatedReaction,
   Easing,
+  runOnUI,
 } from "react-native-reanimated";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { svgPathProperties } from "svg-path-properties";
@@ -34,14 +36,33 @@ export interface DrawPadProps {
   width: number;
   height: number;
   strokeWidth?: number;
+  stroke: string;
+  pathLength: SharedValue<number>;
+  playing: SharedValue<boolean>;
 }
 
 const DrawPad = forwardRef(
-  ({ width, height, strokeWidth = 3.5 }: DrawPadProps, ref) => {
+  (
+    {
+      width,
+      height,
+      strokeWidth = 3.5,
+      stroke,
+      pathLength,
+      playing,
+    }: DrawPadProps,
+    ref
+  ) => {
     const [paths, setPaths] = useState<string[]>([]);
-    const currentPath = useSharedValue("");
-    const playing = useSharedValue(false);
-    const text = useThemeColor({}, "text");
+    const currentPath = useSharedValue<string>("");
+
+    useEffect(() => {
+      if (pathLength) {
+        pathLength.value = paths.reduce((total, path) => {
+          return total + new svgPathProperties(path).getTotalLength();
+        }, 0);
+      }
+    }, [paths]);
 
     const animatedProps = useAnimatedProps(() => ({
       d: currentPath.value,
@@ -73,14 +94,39 @@ const DrawPad = forwardRef(
       });
     }, []);
 
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     const handlePlay = useCallback(() => {
-      playing.value = true;
-    }, []);
+      if (!playing.value) {
+        playing.value = true;
+        timeoutId = setTimeout(() => {
+          playing.value = false;
+        }, pathLength.value * 2);
+
+        return () => {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+        };
+      }
+    }, [playing, pathLength]);
+
+    const handleStop = useCallback(() => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      runOnUI(() => {
+        playing.value = false;
+      })();
+    }, [timeoutId, playing]);
 
     useImperativeHandle(ref, () => ({
       erase: handleErase,
       undo: handleUndo,
       play: handlePlay,
+      stop: handleStop,
     }));
 
     const panGesture = Gesture.Pan()
@@ -111,13 +157,13 @@ const DrawPad = forwardRef(
                   prevLength={prevLength}
                   playing={playing}
                   strokeWidth={strokeWidth}
-                  stroke={text}
+                  stroke={stroke}
                 />
               );
             })}
             <AnimatedPath
               animatedProps={animatedProps}
-              stroke={text}
+              stroke={stroke}
               strokeWidth={strokeWidth}
               {...PATH_PROPS}
             />
@@ -153,14 +199,13 @@ const DrawPath = ({
         progress.value = 0;
         progress.value = withDelay(
           prevLength * 2 + 1,
-          withTiming(
-            1,
-            { duration: length * 2, easing: Easing.bezier(0.4, 0, 0.5, 1) },
-            () => {
-              playing.value = false;
-            }
-          )
+          withTiming(1, {
+            duration: length * 2,
+            easing: Easing.bezier(0.4, 0, 0.5, 1),
+          })
         );
+      } else {
+        progress.value = 1;
       }
     }
   );
