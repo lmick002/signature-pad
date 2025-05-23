@@ -1,4 +1,4 @@
-import { Easing, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import React, { useRef } from "react";
 import DrawPad from "./Drawpad";
 import {
@@ -34,6 +34,7 @@ export default function Board() {
   const pathLength = useSharedValue<number>(0);
   const playing = useSharedValue<boolean>(false);
   const signed = useSharedValue<boolean>(false);
+  const { width } = useWindowDimensions();
 
   const handleErase = () => {
     if (padRef.current) {
@@ -89,7 +90,7 @@ export default function Board() {
       />
       <DrawPad
         height={180}
-        width={340}
+        width={width * 0.85}
         ref={padRef}
         stroke={text}
         pathLength={pathLength}
@@ -106,6 +107,7 @@ export default function Board() {
     </View>
   );
 }
+
 const ActionBar = ({
   onErase,
   onUndo,

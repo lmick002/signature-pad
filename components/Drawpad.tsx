@@ -21,7 +21,6 @@ import Animated, {
   Easing,
   runOnUI,
 } from "react-native-reanimated";
-import { useThemeColor } from "@/hooks/useThemeColor";
 import { svgPathProperties } from "svg-path-properties";
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -144,7 +143,7 @@ const DrawPad = forwardRef(
     return (
       <GestureDetector gesture={panGesture}>
         <View>
-          <Svg height={height} width={width}>
+          <Svg height={height} width={Math.min(width, 480)}>
             {paths.map((p, i) => {
               const prevLength = paths.slice(0, i).reduce((total, prevPath) => {
                 return total + new svgPathProperties(prevPath).getTotalLength();
