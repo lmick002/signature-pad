@@ -190,6 +190,14 @@ const ActionBar = ({
     };
   });
 
+  const startPressing = () => {
+    pressing.value = !signed.value && pathLength.value > 0;
+  };
+
+  const stopPressing = () => {
+    pressing.value = false;
+  };
+
   return (
     <View
       style={{
@@ -222,12 +230,16 @@ const ActionBar = ({
           styles.confirmBtn,
           { backgroundColor: text + "20", width: buttonWidth },
         ]}
-        onPressIn={() => {
-          pressing.value = !signed.value && pathLength.value > 0;
-        }}
-        onPressOut={() => {
-          pressing.value = false;
-        }}
+        {...(isWeb
+          ? {
+              onTouchStart: startPressing,
+              onTouchEnd: stopPressing,
+              onTouchCancel: stopPressing,
+            }
+          : {
+              onPressIn: startPressing,
+              onPressOut: stopPressing,
+            })}
       >
         <Animated.View
           style={[
