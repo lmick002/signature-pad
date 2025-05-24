@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { View } from "react-native";
+import { useWindowDimensions, View } from "react-native";
 import Svg, { G, Path, PathProps } from "react-native-svg";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -32,7 +32,6 @@ const PATH_PROPS: PathProps = {
 };
 
 export interface DrawPadProps {
-  width: number;
   height: number;
   strokeWidth?: number;
   stroke: string;
@@ -42,14 +41,7 @@ export interface DrawPadProps {
 
 const DrawPad = forwardRef(
   (
-    {
-      width,
-      height,
-      strokeWidth = 3.5,
-      stroke,
-      pathLength,
-      playing,
-    }: DrawPadProps,
+    { height, strokeWidth = 3.5, stroke, pathLength, playing }: DrawPadProps,
     ref
   ) => {
     const [paths, setPaths] = useState<string[]>([]);
@@ -92,34 +84,26 @@ const DrawPad = forwardRef(
         return newPaths;
       });
     }, []);
-
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const handlePlay = useCallback(() => {
       if (!playing.value) {
         playing.value = true;
-        timeoutId = setTimeout(() => {
+        timeoutRef.current = setTimeout(() => {
           playing.value = false;
         }, pathLength.value * 2);
-
-        return () => {
-          if (timeoutId) {
-            clearTimeout(timeoutId);
-            timeoutId = null;
-          }
-        };
       }
     }, [playing, pathLength]);
 
     const handleStop = useCallback(() => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
       runOnUI(() => {
         playing.value = false;
       })();
-    }, [timeoutId, playing]);
+    }, [playing]);
 
     useImperativeHandle(ref, () => ({
       erase: handleErase,
@@ -142,8 +126,8 @@ const DrawPad = forwardRef(
 
     return (
       <GestureDetector gesture={panGesture}>
-        <View>
-          <Svg height={height} width={Math.min(width, 480)}>
+        <View style={{ flex: 1 }}>
+          <Svg height={height} width={"100%"}>
             {paths.map((p, i) => {
               const prevLength = paths.slice(0, i).reduce((total, prevPath) => {
                 return total + new svgPathProperties(prevPath).getTotalLength();
@@ -205,11 +189,11 @@ const DrawPath = ({
         );
       } else {
         progress.value =
-          progress.value < 1
+          progress.value < 0.98
             ? withTiming(
                 0,
                 {
-                  duration: progress.value > 0 ? length * 2 : 0,
+                  duration: progress.value > 0 ? 500 : 0,
                   easing: Easing.bezier(0.4, 0, 0.5, 1),
                 },
                 () => {
