@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useWindowDimensions, View } from "react-native";
+import { Platform, View } from "react-native";
 import Svg, { G, Path, PathProps } from "react-native-svg";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -14,12 +14,12 @@ import Animated, {
   useAnimatedProps,
   runOnJS,
   interpolate,
-  withDelay,
   withTiming,
   SharedValue,
   useAnimatedReaction,
   Easing,
   runOnUI,
+  Extrapolation,
 } from "react-native-reanimated";
 import { svgPathProperties } from "svg-path-properties";
 
@@ -32,20 +32,26 @@ const PATH_PROPS: PathProps = {
 };
 
 export interface DrawPadProps {
-  height: number;
   strokeWidth?: number;
   stroke: string;
   pathLength: SharedValue<number>;
   playing: SharedValue<boolean>;
 }
 
-const DrawPad = forwardRef(
-  (
-    { height, strokeWidth = 3.5, stroke, pathLength, playing }: DrawPadProps,
-    ref
-  ) => {
+export type DrawPadHandle = {
+  erase: () => void;
+  undo: () => void;
+  play: () => void;
+  stop: () => void;
+};
+
+const isWeb = Platform.OS === "web";
+
+const DrawPad = forwardRef<DrawPadHandle, DrawPadProps>(
+  ({ strokeWidth = 3.5, stroke, pathLength, playing }, ref) => {
     const [paths, setPaths] = useState<string[]>([]);
     const currentPath = useSharedValue<string>("");
+    const progress = useSharedValue(1);
 
     useEffect(() => {
       if (pathLength) {
@@ -124,10 +130,38 @@ const DrawPad = forwardRef(
         runOnJS(finishPath)();
       });
 
+    useAnimatedReaction(
+      () => playing.value,
+      (isPlaying) => {
+        const duration = pathLength.value * 2;
+        const easing = Easing.bezier(0.4, 0, 0.5, 1);
+
+        if (isPlaying) {
+          progress.value = 0;
+          progress.value = withTiming(1, { duration, easing });
+          return;
+        }
+
+        progress.value = withTiming(
+          0,
+          {
+            duration:
+              progress.value < (isWeb ? 0.95 : 1) /*Decimal Error for Web*/
+                ? progress.value * duration
+                : 0,
+            easing,
+          },
+          () => {
+            progress.value = 1;
+          }
+        );
+      }
+    );
+
     return (
       <GestureDetector gesture={panGesture}>
         <View style={{ flex: 1 }}>
-          <Svg height={height} width={"100%"}>
+          <Svg height={"100%"} width={"100%"}>
             {paths.map((p, i) => {
               const prevLength = paths.slice(0, i).reduce((total, prevPath) => {
                 return total + new svgPathProperties(prevPath).getTotalLength();
@@ -137,10 +171,11 @@ const DrawPad = forwardRef(
                 <DrawPath
                   key={i}
                   path={p}
-                  prevLength={prevLength}
-                  playing={playing}
                   strokeWidth={strokeWidth}
                   stroke={stroke}
+                  progress={progress}
+                  prevLength={prevLength}
+                  totalPathLength={pathLength}
                 />
               );
             })}
@@ -159,55 +194,36 @@ const DrawPad = forwardRef(
 
 const DrawPath = ({
   path,
-  prevLength,
-  playing,
   strokeWidth,
   stroke,
+  progress,
+  prevLength,
+  totalPathLength,
 }: {
   path: string;
-  prevLength: number;
-  playing: SharedValue<boolean>;
   strokeWidth: number;
   stroke: string;
+  prevLength?: number;
+  progress?: SharedValue<number>;
+  totalPathLength?: SharedValue<number>;
 }) => {
   const pathRef = useRef<Path>(null);
   const length = new svgPathProperties(path).getTotalLength();
-  const progress = useSharedValue(1);
-
-  useAnimatedReaction(
-    () => playing.value,
-    (isPlaying, prev) => {
-      if (isPlaying === prev) return;
-      if (isPlaying) {
-        progress.value = 0;
-        progress.value = withDelay(
-          prevLength * 2 + 1,
-          withTiming(1, {
-            duration: length * 2,
-            easing: Easing.bezier(0.4, 0, 0.5, 1),
-          })
-        );
-      } else {
-        progress.value =
-          progress.value < 0.98
-            ? withTiming(
-                0,
-                {
-                  duration: progress.value > 0 ? 500 : 0,
-                  easing: Easing.bezier(0.4, 0, 0.5, 1),
-                },
-                () => {
-                  progress.value = 1;
-                }
-              )
-            : 1;
-      }
-    }
-  );
 
   const animatedProps = useAnimatedProps(() => {
+    const prev = prevLength ?? 0;
+    const total = totalPathLength?.value ?? 0;
+    const start = prev / total;
+    const end = (prev + length) / total;
+    const turn = interpolate(
+      progress?.value ?? 1,
+      [start, end],
+      [0, 1],
+      Extrapolation.CLAMP
+    );
+
     return {
-      strokeDashoffset: interpolate(progress.value, [0, 1], [length, 0]),
+      strokeDashoffset: interpolate(turn, [0, 1], [length, 0]),
     };
   });
 

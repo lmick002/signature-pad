@@ -37,7 +37,6 @@ export default function MaskedText({
     color: textColor,
     fontFamily: "InterMedium",
   };
-  const dur = pressed ? duration : 500;
 
   return (
     <div className="masked-text">
@@ -45,7 +44,7 @@ export default function MaskedText({
         className={`progress ${pressed ? "fill" : "empty"}`}
         style={{
           backgroundColor: baseColor,
-          transitionDuration: `${dur}ms`,
+          transitionDuration: `${duration}ms`,
         }}
       />
       <div className="base" style={textStyle}>
@@ -53,7 +52,7 @@ export default function MaskedText({
       </div>
       <div
         className={`overlay ${pressed ? "pressing" : "init"}`}
-        style={{ ...textStyle, color, transitionDuration: `${dur}ms` }}
+        style={{ ...textStyle, color, transitionDuration: `${duration}ms` }}
       >
         {text}
       </div>
