@@ -1,6 +1,6 @@
-import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
-import React, { useRef } from "react";
-import DrawPad from "./Drawpad";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import DrawPad, { DrawPadHandle } from "./Drawpad";
 import {
   Eraser,
   Eye,
@@ -20,21 +20,21 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import MaskedView from "@react-native-masked-view/masked-view";
+import MaskedText from "./MaskedText";
 
 const ICON_PROPS: LucideProps = {
   size: 21,
   strokeWidth: 1.8,
 };
 const BTN_HEIGHT = 38;
+const isWeb = Platform.OS === "web";
 
 export default function Board() {
   const text = useThemeColor({}, "text");
-  const padRef = useRef<any>(null);
+  const padRef = useRef<DrawPadHandle>(null);
   const pathLength = useSharedValue<number>(0);
   const playing = useSharedValue<boolean>(false);
   const signed = useSharedValue<boolean>(false);
-  const { width } = useWindowDimensions();
 
   const handleErase = () => {
     if (padRef.current) {
@@ -81,6 +81,10 @@ export default function Board() {
         overflow: "hidden",
         borderWidth: 1,
         borderColor: text + "25",
+        maxWidth: 480,
+        width: "92%",
+        alignSelf: "center",
+        height: 300,
       }}
     >
       <HeaderBar
@@ -89,8 +93,6 @@ export default function Board() {
         pathLength={pathLength}
       />
       <DrawPad
-        height={180}
-        width={width * 0.85}
         ref={padRef}
         stroke={text}
         pathLength={pathLength}
@@ -126,6 +128,9 @@ const ActionBar = ({
   const text = useThemeColor({}, "text");
   const buttonWidth = 140;
   const pressing = useSharedValue(false);
+  const [inputType, setInputType] = useState<"touch" | "mouse" | "pen" | null>(
+    null
+  );
 
   const iconProps: LucideProps = {
     ...ICON_PROPS,
@@ -143,14 +148,21 @@ const ActionBar = ({
     }
   );
 
-  const progress = useDerivedValue(() =>
-    withTiming(
-      (signed.value || pressing.value) && pathLength.value > 0 ? 1 : 0,
-      {
-        duration: pressing.value ? pathLength.value * 2 : 0,
-      }
-    )
-  );
+  useEffect(() => {
+    if (!isWeb) return;
+    const handlePointer = (e: PointerEvent) =>
+      setInputType(e.pointerType as any);
+    window.addEventListener("pointerdown", handlePointer);
+    return () => window.removeEventListener("pointerdown", handlePointer);
+  }, []);
+
+  const progress = useDerivedValue(() => {
+    const shouldAnimate =
+      (signed.value || pressing.value) && pathLength.value > 0;
+    const duration = pressing.value ? pathLength.value * 2 : 500;
+
+    return withTiming(shouldAnimate ? 1 : 0, { duration });
+  });
 
   useAnimatedReaction(
     () => progress.value,
@@ -163,11 +175,14 @@ const ActionBar = ({
     }
   );
 
-  const slideAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      width: signed.value ? buttonWidth : buttonWidth * progress.value,
-    };
-  });
+  const slideAnimatedStyle = useAnimatedStyle(() => ({
+    width:
+      signed.value || (isWeb && signed.value)
+        ? buttonWidth
+        : isWeb
+        ? 0
+        : buttonWidth * progress.value,
+  }));
 
   const signedAnimatedStyle = useAnimatedStyle(() => {
     return {
@@ -178,6 +193,14 @@ const ActionBar = ({
       ],
     };
   });
+
+  const startPressing = () => {
+    pressing.value = !signed.value && pathLength.value > 0;
+  };
+
+  const stopPressing = () => {
+    pressing.value = false;
+  };
 
   return (
     <View
@@ -205,83 +228,53 @@ const ActionBar = ({
           <Eraser {...iconProps} />
         </Pressable>
       </Animated.View>
-      <Pressable
-        style={[
-          styles.confirmBtnBlock,
-          styles.confirmBtn,
-          { backgroundColor: text + "20", width: buttonWidth },
-        ]}
-        onPressIn={() => {
-          pressing.value = !signed.value;
-        }}
-        onPressOut={() => {
-          pressing.value = false;
-        }}
-      >
-        <OverlayMask
-          color="#D1FADC"
-          element={
-            <View
-              style={{ width: "100%", height: "100%", backgroundColor: "#000" }}
-            />
-          }
-          animatedStyle={slideAnimatedStyle}
-        />
-        <Animated.View style={[signedAnimatedStyle]}>
-          <View style={[styles.confirmBtnBlock, {}]}>
-            <ThemedText style={{ fontSize: 15, color: "#1B7F3E" }}>
-              Signed
-            </ThemedText>
-          </View>
-          <View style={styles.confirmBtnBlock}>
-            <ThemedText style={{ fontSize: 15 }}>Hold to confirm</ThemedText>
-            <OverlayMask
-              color="#1B7F3E"
-              element={
-                <ThemedText style={{ fontSize: 15, color: "#000" }}>
-                  Hold to confirm
-                </ThemedText>
+      <View>
+        <Pressable
+          style={[
+            styles.confirmBtnBlock,
+            styles.confirmBtn,
+            { backgroundColor: text + "20", width: buttonWidth },
+          ]}
+          {...(isWeb && inputType !== "mouse"
+            ? {
+                onTouchStart: startPressing,
+                onTouchEnd: stopPressing,
+                onTouchCancel: stopPressing,
               }
-              animatedStyle={slideAnimatedStyle}
-            />
-          </View>
-        </Animated.View>
-      </Pressable>
-    </View>
-  );
-};
-
-const OverlayMask = ({
-  color,
-  element,
-  animatedStyle,
-}: {
-  color: string;
-  element: React.ReactNode;
-  animatedStyle?: any;
-}) => {
-  return (
-    <MaskedView
-      style={{ flex: 1, ...StyleSheet.absoluteFillObject }}
-      maskElement={
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-          }}
+            : {
+                onPressIn: startPressing,
+                onPressOut: stopPressing,
+              })}
         >
-          {element}
-        </View>
-      }
-    >
-      <Animated.View
-        style={[
-          { flex: 1, height: "100%", backgroundColor: color },
-          animatedStyle,
-        ]}
-      />
-    </MaskedView>
+          <Animated.View
+            style={[
+              {
+                backgroundColor: "#D1FADC",
+                ...StyleSheet.absoluteFillObject,
+              },
+              slideAnimatedStyle,
+            ]}
+          />
+          <Animated.View style={[signedAnimatedStyle]}>
+            <View style={[styles.confirmBtnBlock, {}]}>
+              <ThemedText style={{ fontSize: 15, color: "#1B7F3E" }}>
+                Signed
+              </ThemedText>
+            </View>
+            <View style={styles.confirmBtnBlock}>
+              <MaskedText
+                color="#1B7F3E"
+                baseColor="#D1FADC"
+                text="Hold to confirm"
+                animatedStyle={slideAnimatedStyle}
+                pathLength={pathLength}
+                pressing={pressing}
+              />
+            </View>
+          </Animated.View>
+        </Pressable>
+      </View>
+    </View>
   );
 };
 
